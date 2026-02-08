@@ -379,6 +379,12 @@ const App = () => {
   };
 
   const createProject = async (projectData) => {
+    // Only admins can create deals
+    if (!isAdmin()) {
+      alert('Permission denied: Only Admins can create new deals.');
+      return;
+    }
+    
     // Select template based on deal type
     const template = projectData.type === 'Buyer' ? BUYER_TEMPLATE : SELLER_TEMPLATE;
     
@@ -625,6 +631,7 @@ const App = () => {
           onLogout={handleLogout}
           currentView={currentView}
           getDealTitle={getDealTitle}
+          isAdmin={isAdmin()}
         />
         <div className="flex-1 p-8 overflow-auto">
           <h1 className="text-3xl font-bold mb-2" style={{ color: '#071D39' }}>Hello {user.firstName}, let's get to work!</h1>
@@ -809,6 +816,7 @@ const App = () => {
           onLogout={handleLogout}
           currentView={currentView}
           getDealTitle={getDealTitle}
+          isAdmin={isAdmin()}
         />
         <div className="flex-1 p-8 overflow-auto">
           <h1 className="text-3xl font-bold mb-6" style={{ color: '#071D39' }}>Deal Archive</h1>
@@ -920,6 +928,7 @@ const App = () => {
           onLogout={handleLogout}
           currentView={currentView}
           getDealTitle={getDealTitle}
+          isAdmin={isAdmin()}
         />
       <div className="flex-1 overflow-hidden flex flex-col">
         <div className="bg-white border-b p-4">
@@ -1148,7 +1157,7 @@ const LoginScreen = ({ onLogin }) => {
   );
 };
 
-const Sidebar = ({ projects, onSelectProject, onDashboard, onArchive, onNewProject, onManageTeam, onMyProfile, currentView, selectedProjectId, onLogout, getDealTitle }) => {
+const Sidebar = ({ projects, onSelectProject, onDashboard, onArchive, onNewProject, onManageTeam, onMyProfile, currentView, selectedProjectId, onLogout, getDealTitle, isAdmin }) => {
   return (
     <div className="w-64 border-r flex flex-col" style={{ backgroundColor: '#FFFFFF', borderColor: '#89A8B1' }}>
       <div className="p-4 border-b flex items-center justify-center" style={{ backgroundColor: '#071D39', borderColor: '#071D39' }}>
@@ -1252,14 +1261,27 @@ const Sidebar = ({ projects, onSelectProject, onDashboard, onArchive, onNewProje
         <Archive className="w-5 h-5" />
         Deal Archive
       </button>
-      <button
-        onClick={onNewProject}
-        className="mx-4 mb-4 text-white p-3 rounded font-semibold flex items-center justify-center gap-2"
-        style={{ backgroundColor: '#516469' }}
-      >
-        <Plus className="w-5 h-5" />
-        New Deal
-      </button>
+      <div className="mx-3 mb-3">
+          {isAdmin ? (
+            <button
+              onClick={onNewProject}
+              className="w-full p-3 rounded font-semibold flex items-center justify-center gap-2"
+              style={{ color: '#FFFFFF', backgroundColor: '#071D39' }}
+            >
+              <Plus className="w-5 h-5" />
+              New Deal
+            </button>
+          ) : (
+            <div
+              className="w-full p-3 rounded font-semibold flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
+              style={{ color: '#FFFFFF', backgroundColor: '#071D39' }}
+              title="Only Admins can create new deals"
+            >
+              <Plus className="w-5 h-5" />
+              New Deal
+            </div>
+          )}
+        </div>
       {onLogout && (
         <button
           onClick={onLogout}
