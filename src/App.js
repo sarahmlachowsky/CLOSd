@@ -1,3 +1,6 @@
+import { signOut } from "firebase/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "./firebase";
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Home, Calendar, AlertCircle, Edit2, Archive, Users } from 'lucide-react';
 
@@ -589,12 +592,20 @@ const App = () => {
   const getOverdueTasksGroupedByDeal = () => groupTasksByDeal(getOverdueTasks());
   const getDueSoonTasksGroupedByDeal = () => groupTasksByDeal(getDueSoonTasks());
 
-  const handleLogout = () => {
-    setUser(null);
-    setCurrentView('dashboard');
-    setSelectedProject(null);
-    setSelectedTask(null);
-  };
+  const handleLogout = async () => {
+  try {
+    await signOut(auth);            // logs out of Firebase
+  } catch (e) {
+    console.error("Logout error:", e);
+  }
+
+  // clear local storage + app state
+  storage.delete("user");
+  setUser(null);
+  setCurrentView("dashboard");
+  setSelectedProject(null);
+  setSelectedTask(null);
+};
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
@@ -1089,14 +1100,24 @@ const App = () => {
 const LoginScreen = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
 
-  const handleSubmit = () => {
-    if (email && password && firstName) {
-      onLogin({ email, firstName, lastName });
-    }
-  };
+  const handleSubmit = async () => {
+  if (!email || !password) return;
+
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+    // Continue your existing login flow
+    onLogin({
+      email,
+      uid: userCredential.user.uid
+    });
+
+  } catch (error) {
+    console.error("Firebase login error:", error);
+    alert(error.message);
+  }
+};
 
   return (
     <div className="flex items-center justify-center h-screen" style={{ background: 'linear-gradient(to bottom right, #071D39, #516469)' }}>
@@ -1111,22 +1132,6 @@ const LoginScreen = ({ onLogin }) => {
           </div>
         </div>
         <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="First Name"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            className="w-full p-3 border rounded"
-            style={{ borderColor: '#89A8B1' }}
-          />
-          <input
-            type="text"
-            placeholder="Last Name"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            className="w-full p-3 border rounded"
-            style={{ borderColor: '#89A8B1' }}
-          />
           <input
             type="email"
             placeholder="Email"
