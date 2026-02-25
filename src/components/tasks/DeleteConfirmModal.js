@@ -9,26 +9,14 @@ const DeleteConfirmModal = ({ projectAddress, onConfirm, onCancel }) => {
           Are you sure you want to permanently delete <strong>{projectAddress}</strong>? This will remove the deal and all its tasks. This action cannot be undone.
         </p>
         <div className="flex gap-4">
-          <button
-            onClick={onCancel}
+          <button onClick={onCancel}
             className="flex-1 px-4 py-3 rounded font-semibold"
-            style={{ 
-              backgroundColor: '#F3F4F6',
-              color: '#374151',
-              border: '2px solid #D1D5DB'
-            }}
-          >
+            style={{ backgroundColor: '#F3F4F6', color: '#374151', border: '2px solid #D1D5DB' }}>
             Cancel
           </button>
-          <button
-            onClick={onConfirm}
+          <button onClick={onConfirm}
             className="flex-1 px-4 py-3 rounded font-semibold"
-            style={{ 
-              backgroundColor: '#EF4444',
-              color: '#FFFFFF',
-              border: '2px solid #DC2626'
-            }}
-          >
+            style={{ backgroundColor: '#EF4444', color: '#FFFFFF', border: '2px solid #DC2626' }}>
             Delete
           </button>
         </div>

@@ -1,4 +1,4 @@
-export const BUYER_TEMPLATE = [
+const BUYER_TEMPLATE = [
   { theme: "New Lead", group: 1, activities: [
     { name: "Create new contact in CRM and add info/tags", notes: "Collect name, phone number, email, address" },
     { name: "Add neighborhood using address", notes: "" },
@@ -98,3 +98,5 @@ export const BUYER_TEMPLATE = [
     { name: "Submit Closure items to Dot Loop", notes: "Survey, DA (uploaded by MC), Executed Alta" }
   ]}
 ];
+
+export default BUYER_TEMPLATE;

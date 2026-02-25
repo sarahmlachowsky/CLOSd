@@ -1,4 +1,4 @@
-export const SELLER_TEMPLATE = [
+const SELLER_TEMPLATE = [
   { theme: "New Lead", group: 1, activities: [
     { name: "Create new contact in CRM w/ info & tags", notes: "Collect name, phone number, email, address" },
     { name: "Add neighborhood using address", notes: "" },
@@ -96,3 +96,5 @@ export const SELLER_TEMPLATE = [
     { name: "Update contact info / create Smart Plan", notes: "" }
   ]}
 ];
+
+export default SELLER_TEMPLATE;

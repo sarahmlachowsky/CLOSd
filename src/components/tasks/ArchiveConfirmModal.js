@@ -9,26 +9,14 @@ const ArchiveConfirmModal = ({ projectAddress, onConfirm, onCancel }) => {
           Archive the deal for <strong>{projectAddress}</strong>? You can restore it from the Deal Archive later.
         </p>
         <div className="flex gap-4">
-          <button
-            onClick={onCancel}
+          <button onClick={onCancel}
             className="flex-1 px-4 py-3 rounded font-semibold"
-            style={{ 
-              backgroundColor: '#F3F4F6',
-              color: '#374151',
-              border: '2px solid #D1D5DB'
-            }}
-          >
+            style={{ backgroundColor: '#F3F4F6', color: '#374151', border: '2px solid #D1D5DB' }}>
             Cancel
           </button>
-          <button
-            onClick={onConfirm}
+          <button onClick={onConfirm}
             className="flex-1 px-4 py-3 rounded font-semibold"
-            style={{ 
-              backgroundColor: '#F59E0B',
-              color: '#FFFFFF',
-              border: '2px solid #D97706'
-            }}
-          >
+            style={{ backgroundColor: '#F59E0B', color: '#FFFFFF', border: '2px solid #D97706' }}>
             Archive Deal
           </button>
         </div>
