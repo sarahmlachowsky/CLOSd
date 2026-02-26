@@ -31,11 +31,10 @@ const LoginScreen = ({ onLogin }) => {
       return;
     }
 
-    // Auto-upgrade to superAdmin if email matches config
     let platformRole = userProfile.platformRole || 'user';
     if (isSuperAdminEmail(email) && platformRole !== 'superAdmin') {
       platformRole = 'superAdmin';
-      await updateLastLogin(uid); // we'll update role in the same step below
+      await updateLastLogin(uid);
       const { updateUserProfile } = await import("../../services/firestoreService");
       await updateUserProfile(uid, { platformRole: 'superAdmin' });
     }
@@ -65,22 +64,16 @@ const LoginScreen = ({ onLogin }) => {
 
     try {
       if (isSignup) {
-        // 1. Create Firebase Auth account
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const uid = userCredential.user.uid;
 
-        // 2. Send verification email
         await sendEmailVerification(userCredential.user);
 
-        // 3. Create user profile in Firestore (/users/{uid})
         const platformRole = isSuperAdminEmail(email) ? 'superAdmin' : 'user';
         await createUserProfile(uid, { email, firstName, lastName, platformRole });
 
-        // 4. Create organization in Firestore (/organizations/{orgId})
-        //    This also links the user to the org (sets orgId on user doc)
         const newOrgId = await createOrganization(uid, teamName.trim());
 
-        // 5. Add owner as the first team member (admin)
         await addMember(newOrgId, {
           uid,
           firstName,
@@ -96,7 +89,6 @@ const LoginScreen = ({ onLogin }) => {
         );
         await signOut(auth);
       } else {
-        // LOGIN
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
         if (!userCredential.user.emailVerified) {
@@ -105,12 +97,10 @@ const LoginScreen = ({ onLogin }) => {
           return;
         }
 
-        // Update last login timestamp
         try {
           await updateLastLogin(userCredential.user.uid);
         } catch (e) {
           console.warn("Could not update last login:", e);
-          // Non-blocking — don't prevent login over this
         }
 
         await finishLogin(userCredential.user.uid, email);
@@ -123,22 +113,45 @@ const LoginScreen = ({ onLogin }) => {
     }
   };
 
+  const inputStyle = {
+    borderColor: '#89A8B1',
+    fontFamily: "'AvenirNext', sans-serif",
+    fontSize: '14px',
+    color: '#071D39',
+  };
+
+  const inputFocusClass = "w-full p-3 border rounded outline-none transition-all duration-200";
+
   return (
     <div
       className="flex items-center justify-center h-screen"
-      style={{ background: 'linear-gradient(to bottom right, #071D39, #516469)' }}
+      style={{ background: 'linear-gradient(135deg, #071D39 0%, #516469 100%)' }}
     >
-      <div className="bg-white p-8 rounded-lg shadow-xl w-96">
-        <div className="text-center mb-8">
-          <div className="mb-4 flex justify-center">
-            <img
-              src="/closd-logo.png"
-              alt="CLOSD Logo"
-              className="h-32 w-auto object-contain"
-            />
-          </div>
+      <div
+        className="bg-white p-10 rounded-xl shadow-2xl w-96"
+        style={{ fontFamily: "'AvenirNext', sans-serif" }}
+      >
+        {/* Logo */}
+        <div className="text-center mb-6">
+          <img
+            src="/closd-logo-white-bg.png"
+            alt="CLOSD Logo"
+            className="h-20 w-auto mx-auto object-contain"
+          />
+          <p className="mt-3 text-sm" style={{ color: '#516469' }}>
+            Real estate transactions, simplified.
+          </p>
         </div>
-        <div className="space-y-4">
+
+        {/* Form heading */}
+        <h2
+          className="text-center text-lg mb-5"
+          style={{ color: '#071D39', fontWeight: 600 }}
+        >
+          {isSignup ? 'Create your account' : 'Welcome back'}
+        </h2>
+
+        <div className="space-y-3">
           {isSignup && (
             <>
               <input
@@ -146,24 +159,24 @@ const LoginScreen = ({ onLogin }) => {
                 placeholder="First Name"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                className="w-full p-3 border rounded"
-                style={{ borderColor: "#89A8B1" }}
+                className={inputFocusClass}
+                style={inputStyle}
               />
               <input
                 type="text"
                 placeholder="Last Name"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                className="w-full p-3 border rounded"
-                style={{ borderColor: "#89A8B1" }}
+                className={inputFocusClass}
+                style={inputStyle}
               />
               <input
                 type="text"
                 placeholder="Team / Company Name"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
-                className="w-full p-3 border rounded"
-                style={{ borderColor: "#89A8B1" }}
+                className={inputFocusClass}
+                style={inputStyle}
               />
             </>
           )}
@@ -172,8 +185,8 @@ const LoginScreen = ({ onLogin }) => {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full p-3 border rounded"
-            style={{ borderColor: '#89A8B1' }}
+            className={inputFocusClass}
+            style={inputStyle}
           />
           <input
             type="password"
@@ -181,17 +194,25 @@ const LoginScreen = ({ onLogin }) => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
-            className="w-full p-3 border rounded"
-            style={{ borderColor: '#89A8B1' }}
+            className={inputFocusClass}
+            style={inputStyle}
           />
+
+          {/* CTA Button — Brand Green */}
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="w-full text-white p-3 rounded font-semibold"
+            className="w-full text-white p-3 rounded-lg font-semibold transition-all duration-200"
             style={{
-              backgroundColor: loading ? '#8a9a9e' : '#516469',
+              backgroundColor: loading ? '#89A8B1' : '#75BB2E',
               cursor: loading ? 'not-allowed' : 'pointer',
+              fontFamily: "'AvenirNext', sans-serif",
+              fontWeight: 600,
+              fontSize: '15px',
+              letterSpacing: '0.3px',
             }}
+            onMouseEnter={(e) => { if (!loading) e.target.style.backgroundColor = '#071D39'; }}
+            onMouseLeave={(e) => { if (!loading) e.target.style.backgroundColor = '#75BB2E'; }}
           >
             {loading
               ? 'Please wait...'
@@ -199,11 +220,14 @@ const LoginScreen = ({ onLogin }) => {
                 ? 'Create Account'
                 : 'Sign In'}
           </button>
-          <div className="text-center mt-4">
+
+          {/* Toggle link */}
+          <div className="text-center pt-2">
             <button
               type="button"
               onClick={() => setIsSignup(!isSignup)}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm hover:underline"
+              style={{ color: '#516469', fontFamily: "'AvenirNext', sans-serif" }}
             >
               {isSignup
                 ? "Already have an account? Log In"

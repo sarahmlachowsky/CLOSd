@@ -15,7 +15,7 @@ const getInitials = (name) => {
 
 const getUserColor = (name) => {
   if (!name) return '#516469';
-  const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#EF4444', '#6366F1'];
+  const colors = ['#75BB2E', '#75BB2E', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#EF4444', '#6366F1'];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return colors[Math.abs(hash) % colors.length];
@@ -24,7 +24,7 @@ const getUserColor = (name) => {
 const StatusIcon = ({ status }) => {
   if (status === 'complete') {
     return (
-      <div style={{ width: 20, height: 20, borderRadius: '50%', backgroundColor: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: 20, height: 20, borderRadius: '50%', backgroundColor: '#75BB2E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Check size={12} color="white" />
       </div>
     );
@@ -47,7 +47,7 @@ const ProgressBar = ({ completed, total }) => {
         <div style={{
           height: '100%',
           width: `${pct}%`,
-          backgroundColor: pct === 100 ? '#10B981' : pct > 50 ? '#3B82F6' : '#89A8B1',
+          backgroundColor: pct === 100 ? '#75BB2E' : pct > 50 ? '#75BB2E' : '#89A8B1',
           borderRadius: 4,
           transition: 'width 0.4s ease'
         }} />
@@ -87,7 +87,7 @@ const ThemeSection = ({ theme, groupNum, tasks, isOpen, onToggle, onTaskClick, i
 
         <div style={{
           width: 28, height: 28, borderRadius: 6,
-          backgroundColor: isOpen ? '#89A8B1' : allDone ? '#10B981' : '#F1F5F9',
+          backgroundColor: isOpen ? '#89A8B1' : allDone ? '#75BB2E' : '#F1F5F9',
           color: isOpen ? '#FFFFFF' : allDone ? '#FFFFFF' : '#516469',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 12, fontWeight: 700
@@ -274,7 +274,7 @@ const AccordionBoard = ({ project, onTaskClick, getTaskColor, isTaskUrgent }) =>
           <div style={{
             height: '100%',
             width: `${overallPct}%`,
-            backgroundColor: overallPct === 100 ? '#10B981' : overallPct > 50 ? '#3B82F6' : '#89A8B1',
+            backgroundColor: overallPct === 100 ? '#75BB2E' : overallPct > 50 ? '#75BB2E' : '#89A8B1',
             borderRadius: 5,
             transition: 'width 0.6s ease'
           }} />

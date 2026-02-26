@@ -7,7 +7,7 @@ const Sidebar = ({ projects, onSelectProject, onPipeline, onDashboard, onArchive
       <div className="p-4 border-b flex items-center justify-center" style={{ backgroundColor: '#071D39', borderColor: '#071D39' }}>
         <div className="text-center w-full">
           <img 
-            src="/closd-logo.png" 
+            src="/closd-logo-dark-bg.png" 
             alt="CLOSD Logo" 
             className="h-16 w-auto mx-auto object-contain"
           />
@@ -156,7 +156,7 @@ const Sidebar = ({ projects, onSelectProject, onPipeline, onDashboard, onArchive
             <button
               onClick={onNewProject}
               className="w-full p-3 rounded font-semibold flex items-center justify-center gap-2"
-              style={{ color: '#FFFFFF', backgroundColor: '#071D39' }}
+              style={{ color: '#FFFFFF', backgroundColor: '#75BB2E' }}
             >
               <Plus className="w-5 h-5" />
               New Deal
@@ -164,7 +164,7 @@ const Sidebar = ({ projects, onSelectProject, onPipeline, onDashboard, onArchive
           ) : (
             <div
               className="w-full p-3 rounded font-semibold flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
-              style={{ color: '#FFFFFF', backgroundColor: '#071D39' }}
+              style={{ color: '#FFFFFF', backgroundColor: '#75BB2E' }}
               title="Only Admins can create new deals"
             >
               <Plus className="w-5 h-5" />

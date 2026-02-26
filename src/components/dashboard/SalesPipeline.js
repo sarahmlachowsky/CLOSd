@@ -83,7 +83,7 @@ const SalesPipeline = ({ projects, getDealTitle }) => {
                   <td className="border p-3 text-right" style={{ color: '#516469' }}>
                     {formatCurrency(deal.contractPrice)}
                   </td>
-                  <td className="border p-3 text-right font-medium" style={{ color: '#059669' }}>
+                  <td className="border p-3 text-right font-medium" style={{ color: '#75BB2E' }}>
                     {formatCurrency(calculateCommission(deal))}
                   </td>
                   <td className="border p-3 text-right" style={{ color: '#516469' }}>
