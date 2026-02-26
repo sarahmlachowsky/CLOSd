@@ -33,6 +33,8 @@ import ProjectView from './components/dashboard/ProjectView';
 import NewProjectModal from './components/tasks/NewProjectModal';
 import EditProfileModal from './components/tasks/EditProfileModal';
 import SuperAdminDashboard from './components/superadmin/SuperAdminDashboard';
+import MyProfilePage from './components/dashboard/MyProfilePage';
+import SupportPage from './components/support/SupportPage';
 import { loadOrgDataForImpersonation } from './services/superAdminService';
 
 const App = () => {
@@ -523,12 +525,7 @@ const App = () => {
   };
 
   const handleOpenMyProfile = () => {
-    const member = getCurrentUserMember();
-    if (member) {
-      setEditProfileMember(member);
-      setEditProfileMode('self');
-      setShowEditProfileModal(true);
-    }
+    setCurrentView('myProfile');
   };
 
   const handleEditTeamMember = (member) => {
@@ -637,12 +634,15 @@ const App = () => {
     onNewProject: () => setShowNewProjectModal(true),
     onTeamSettings: () => setCurrentView('teamSettings'),
     onMyProfile: handleOpenMyProfile,
+    onHelpSupport: () => setCurrentView('helpSupport'),
     onSuperAdmin: () => setCurrentView('superAdmin'),
     onLogout: handleLogout,
     currentView,
     getDealTitle,
     isAdmin: isAdmin(),
     isSuperAdmin: isSuperAdmin(),
+    user,
+    orgId,
   };
 
   // --- Impersonation Banner (fixed position — shows on ALL views) ---
@@ -671,6 +671,37 @@ const App = () => {
   // Padding to push content below the fixed banner
   const impersonationPadding = impersonation ? { paddingTop: '40px' } : {};
 
+  if (currentView === 'helpSupport') {
+    return (
+      <>
+        <ImpersonationBanner />
+        <div className="flex h-screen" style={{ backgroundColor: '#FFFFFF', ...impersonationPadding }}>
+          <Sidebar {...sidebarProps} />
+          <SupportPage user={user} orgId={orgId} />
+        </div>
+      </>
+    );
+  }
+  if (currentView === 'myProfile') {
+    const currentMember = getCurrentUserMember();
+    if (currentMember) {
+      return (
+        <>
+          <ImpersonationBanner />
+          <div className="flex h-screen" style={{ backgroundColor: '#FFFFFF', ...impersonationPadding }}>
+            <Sidebar {...sidebarProps} />
+            <MyProfilePage
+              member={currentMember}
+              isAdmin={isAdmin()}
+              onSave={(memberId, updates) => {
+                updateTeamMember(memberId, updates);
+              }}
+            />
+          </div>
+        </>
+      );
+    }
+  }
   if (currentView === 'superAdmin' && isSuperAdmin()) {
     return (
       <div className="flex h-screen" style={{ backgroundColor: '#FFFFFF' }}>

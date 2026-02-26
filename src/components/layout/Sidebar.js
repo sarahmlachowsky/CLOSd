@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, Plus, Users, Edit2, Archive, DollarSign, Shield } from 'lucide-react';
+import { Home, Plus, Users, Edit2, Archive, DollarSign, Shield, HelpCircle } from 'lucide-react';
 
-const Sidebar = ({ projects, onSelectProject, onPipeline, onDashboard, onArchive, onNewProject, onTeamSettings, onMyProfile, onSuperAdmin, currentView, selectedProjectId, onLogout, getDealTitle, isAdmin, isSuperAdmin }) => {
+const Sidebar = ({ projects, onSelectProject, onPipeline, onDashboard, onArchive, onNewProject, onTeamSettings, onMyProfile, onHelpSupport, onSuperAdmin, currentView, selectedProjectId, onLogout, getDealTitle, isAdmin, isSuperAdmin }) => {
   return (
     <div className="w-64 border-r flex flex-col" style={{ backgroundColor: '#FFFFFF', borderColor: '#89A8B1' }}>
       <div className="p-4 border-b flex items-center justify-center" style={{ backgroundColor: '#071D39', borderColor: '#071D39' }}>
@@ -49,10 +49,26 @@ const Sidebar = ({ projects, onSelectProject, onPipeline, onDashboard, onArchive
         <button
           onClick={onMyProfile}
           className="w-full text-left p-4 flex items-center gap-2"
-          style={{ color: '#516469' }}
+          style={{
+            backgroundColor: currentView === 'myProfile' ? '#89A8B1' : 'transparent',
+            color: currentView === 'myProfile' ? '#071D39' : '#516469'
+          }}
         >
           <Edit2 className="w-5 h-5" />
           My Profile
+        </button>
+
+        {/* Help / Support button — visible to all users */}
+        <button
+          onClick={onHelpSupport}
+          className="w-full text-left p-4 flex items-center gap-2"
+          style={{
+            backgroundColor: currentView === 'helpSupport' ? '#89A8B1' : 'transparent',
+            color: currentView === 'helpSupport' ? '#071D39' : '#516469'
+          }}
+        >
+          <HelpCircle className="w-5 h-5" />
+          Help & Support
         </button>
 
         {/* SuperAdmin Dashboard — only visible to superAdmins */}

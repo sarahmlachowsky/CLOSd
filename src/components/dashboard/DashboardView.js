@@ -11,7 +11,7 @@ import TaskDetailModal from '../tasks/TaskDetailModal';
 const DashboardView = ({
   user, activeProjects, teamMembers, currentView,
   onSelectProject, onPipeline, onDashboard, onArchive, onNewProject,
-  onTeamSettings, onMyProfile, onLogout, getDealTitle, isAdmin,
+  onTeamSettings, onMyProfile, onSuperAdmin, onLogout, getDealTitle, isAdmin, isSuperAdmin, orgId,
   getTaskColor, isTaskUrgent,
   getMyTasks, getDueSoonTasks, getOverdueTasks,
   getMyTasksGroupedByDeal, getDueSoonTasksGroupedByDeal, getOverdueTasksGroupedByDeal,
@@ -35,14 +35,18 @@ const DashboardView = ({
         onNewProject={onNewProject}
         onTeamSettings={onTeamSettings}
         onMyProfile={onMyProfile}
+        onSuperAdmin={onSuperAdmin}
         onLogout={onLogout}
         currentView={currentView}
         getDealTitle={getDealTitle}
         isAdmin={isAdmin}
+        isSuperAdmin={isSuperAdmin}
+        user={user}
+        orgId={orgId}
       />
       <div className="flex-1 p-8 overflow-auto">
         <h1 className="text-3xl font-bold mb-2" style={{ color: '#071D39' }}>
-          Hello {user.firstName}, let's get to work!
+          Hello {user.firstName}, let's get these deals CLOSd!
         </h1>
         <div className="flex flex-col gap-6 mt-8">
           <DashboardCard
