@@ -150,7 +150,7 @@ const TeamSettings = ({
             <button
               onClick={handleAddMember}
               className="p-3 rounded font-semibold"
-              style={{ backgroundColor: '#071D39', color: '#FFFFFF' }}
+              style={{ backgroundColor: '#75BB2E', color: '#FFFFFF' }}
             >
               Add Team Member
             </button>
@@ -224,7 +224,7 @@ const TeamSettings = ({
                   <button
                     onClick={handleSaveAssignments}
                     className="px-4 py-2 rounded font-semibold"
-                    style={{ backgroundColor: '#071D39', color: '#FFFFFF' }}
+                    style={{ backgroundColor: '#75BB2E', color: '#FFFFFF' }}
                   >
                     Save Assignments
                   </button>

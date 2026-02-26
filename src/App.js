@@ -36,6 +36,7 @@ import SuperAdminDashboard from './components/superadmin/SuperAdminDashboard';
 import MyProfilePage from './components/dashboard/MyProfilePage';
 import SupportPage from './components/support/SupportPage';
 import { loadOrgDataForImpersonation } from './services/superAdminService';
+import { sendNewDealNotifications, sendTaskAssignedNotification } from './services/notificationService';
 
 const App = () => {
   const [user, setUser] = useState(null);
@@ -195,6 +196,9 @@ const App = () => {
 
     const newProject = { id: projectId, ...projectDoc, tasks: loadedTasks };
 
+    // Send new deal email notifications to all assigned team members
+    sendNewDealNotifications(projectDoc, loadedTasks, teamMembers);
+
     setProjects(prev => [...prev, newProject]);
     setShowNewProjectModal(false);
     setSelectedProject(newProject);
@@ -249,6 +253,15 @@ const App = () => {
   // ============================================
   const updateTask = async (projectId, taskId, updates) => {
     await fsUpdateTask(orgId, projectId, taskId, updates);
+
+    // If assignedTo changed, notify the new assignee
+    if (updates.assignedTo) {
+      const project = projects.find(p => p.id === projectId);
+      const task = project?.tasks?.find(t => t.id === taskId);
+      if (project && task) {
+        sendTaskAssignedNotification(project, { ...task, ...updates }, teamMembers);
+      }
+    }
 
     const updated = projects.map(p => {
       if (p.id === projectId) {
