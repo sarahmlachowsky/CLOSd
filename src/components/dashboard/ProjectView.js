@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, Edit2, Archive } from 'lucide-react';
 import Sidebar from '../layout/Sidebar';
-import KanbanBoard from '../tasks/KanbanBoard';
+import AccordionBoard from '../tasks/AccordionBoard';
 import TaskDetailPanel from '../tasks/TaskDetailPanel';
 import DealFinancials from '../tasks/DealFinancials';
 import NewProjectModal from '../tasks/NewProjectModal';
@@ -100,7 +100,7 @@ const ProjectView = ({
           </div>
         </div>
         <div className="flex-1 overflow-x-auto overflow-y-auto p-4">
-          <KanbanBoard
+          <AccordionBoard
             project={selectedProject}
             onTaskClick={onTaskClick}
             getTaskColor={getTaskColor}

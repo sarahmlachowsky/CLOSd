@@ -1,7 +1,16 @@
 import React from 'react';
 
 const KanbanBoard = ({ project, onTaskClick, getTaskColor, isTaskUrgent }) => {
-  const themes = [...new Set(project.tasks.map(t => t.theme))];
+  const themeOrder = [
+    "New Lead", "Lead", "Document Prep", "Listing Prep", "MLS", "Active",
+    "Active Showing", "Offer Prep",
+    "Under Contract", "Pre-close", "Pre-Close", "Closed"
+  ];
+  const themes = [...new Set(project.tasks.map(t => t.theme))].sort((a, b) => {
+    const idxA = themeOrder.indexOf(a);
+    const idxB = themeOrder.indexOf(b);
+    return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+  });
 
   const getInitials = (name) => {
     if (!name) return '';
