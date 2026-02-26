@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, Plus, Users, Edit2, Archive, DollarSign } from 'lucide-react';
+import { Home, Plus, Users, Edit2, Archive, DollarSign, Shield } from 'lucide-react';
 
-const Sidebar = ({ projects, onSelectProject, onPipeline, onDashboard, onArchive, onNewProject, onTeamSettings, onMyProfile, currentView, selectedProjectId, onLogout, getDealTitle, isAdmin }) => {
+const Sidebar = ({ projects, onSelectProject, onPipeline, onDashboard, onArchive, onNewProject, onTeamSettings, onMyProfile, onSuperAdmin, currentView, selectedProjectId, onLogout, getDealTitle, isAdmin, isSuperAdmin }) => {
   return (
     <div className="w-64 border-r flex flex-col" style={{ backgroundColor: '#FFFFFF', borderColor: '#89A8B1' }}>
       <div className="p-4 border-b flex items-center justify-center" style={{ backgroundColor: '#071D39', borderColor: '#071D39' }}>
@@ -54,6 +54,23 @@ const Sidebar = ({ projects, onSelectProject, onPipeline, onDashboard, onArchive
           <Edit2 className="w-5 h-5" />
           My Profile
         </button>
+
+        {/* SuperAdmin Dashboard — only visible to superAdmins */}
+        {isSuperAdmin && (
+          <button
+            onClick={onSuperAdmin}
+            className="w-full text-left p-4 flex items-center gap-2"
+            style={{
+              backgroundColor: currentView === 'superAdmin' ? '#89A8B1' : 'transparent',
+              color: currentView === 'superAdmin' ? '#071D39' : '#E53E3E',
+              fontWeight: '600',
+            }}
+          >
+            <Shield className="w-5 h-5" />
+            SuperAdmin
+          </button>
+        )}
+
         <div className="p-4 text-sm font-semibold" style={{ color: '#516469' }}>ACTIVE DEALS</div>
         
         {/* Sellers Section */}

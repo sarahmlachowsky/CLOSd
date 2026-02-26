@@ -1,10 +1,27 @@
-import { signOut } from "firebase/auth";
+import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import React, { useState, useEffect } from 'react';
+import { Eye } from 'lucide-react';
 
 import SELLER_TEMPLATE from './templates/sellerTemplate';
 import BUYER_TEMPLATE from './templates/buyerTemplate';
-import storage from './services/firebaseService';
+
+// Firestore service (replaces localStorage)
+import {
+  getUserProfile,
+  updateUserProfile,
+  loadOrgData as loadOrgDataFromFirestore,
+  createProject as fsCreateProject,
+  createTasks as fsCreateTasks,
+  getTasks as fsGetTasks,
+  updateProject as fsUpdateProject,
+  deleteProject as fsDeleteProject,
+  updateTask as fsUpdateTask,
+  addMember as fsAddMember,
+  updateMember as fsUpdateMember,
+  deleteMember as fsDeleteMember,
+  saveDefaultAssignments as fsSaveDefaultAssignments,
+} from './services/firestoreService';
 
 import LoginScreen from './components/auth/LoginScreen';
 import Sidebar from './components/layout/Sidebar';
@@ -15,9 +32,12 @@ import TeamSettings from './components/dashboard/TeamSettings';
 import ProjectView from './components/dashboard/ProjectView';
 import NewProjectModal from './components/tasks/NewProjectModal';
 import EditProfileModal from './components/tasks/EditProfileModal';
+import SuperAdminDashboard from './components/superadmin/SuperAdminDashboard';
+import { loadOrgDataForImpersonation } from './services/superAdminService';
 
 const App = () => {
   const [user, setUser] = useState(null);
+  const [orgId, setOrgId] = useState(null);
   const [projects, setProjects] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [currentView, setCurrentView] = useState('pipeline');
@@ -41,140 +61,159 @@ const App = () => {
   const [taskDetailTask, setTaskDetailTask] = useState(null);
   const [taskDetailProject, setTaskDetailProject] = useState(null);
 
-  useEffect(() => { loadData(); }, []);
+  // Impersonation state
+  const [impersonation, setImpersonation] = useState(null);
+  const [originalOrgId, setOriginalOrgId] = useState(null);
+  const [originalProjects, setOriginalProjects] = useState(null);
+  const [originalTeamMembers, setOriginalTeamMembers] = useState(null);
+  const [originalDefaultAssignments, setOriginalDefaultAssignments] = useState(null);
 
-  const loadData = async () => {
+  // ============================================
+  // LOAD ORG DATA (shared by auth listener + manual login)
+  // ============================================
+  const initializeOrg = async (userData) => {
     try {
-      const userData = storage.get('user');
-      const projectsData = storage.get('projects');
-      const teamData = storage.get('team');
-      if (userData) setUser(JSON.parse(userData.value));
-      if (projectsData) {
-        const loaded = JSON.parse(projectsData.value);
-        setProjects(loaded.map(p => ({ ...p, status: p.status || 'active' })));
-      }
-      if (teamData) setTeamMembers(JSON.parse(teamData.value));
-      const savedDefaults = storage.get('defaultAssignments');
-      if (savedDefaults) setDefaultAssignments(JSON.parse(savedDefaults.value));
-    } catch (error) { console.log('Starting fresh'); }
-    setLoading(false);
-  };
-
-  const saveUser = async (userData) => {
-    try {
-      storage.set('user', JSON.stringify(userData));
-      setUser(userData);
-      const teamData = storage.get('team');
-      let currentTeam = teamData ? JSON.parse(teamData.value) : [];
-      const userExists = currentTeam.some(m => m.email === userData.email);
-      if (!userExists) {
-        const newMember = {
-          id: Date.now().toString(), firstName: userData.firstName,
-          lastName: userData.lastName || '', email: userData.email,
-          phone: '', role: currentTeam.length === 0 ? 'admin' : 'member'
-        };
-        currentTeam = [...currentTeam, newMember];
-        storage.set('team', JSON.stringify(currentTeam));
-      }
-      setTeamMembers(currentTeam);
-    } catch (error) { setUser(userData); }
-  };
-
-  const saveProjects = async (data) => {
-    try { storage.set('projects', JSON.stringify(data)); setProjects(data); }
-    catch (e) { console.error('Error saving'); }
-  };
-
-  const saveTeamMembers = async (data) => {
-    try { storage.set('team', JSON.stringify(data)); setTeamMembers(data); }
-    catch (e) { console.error('Error saving team'); }
-  };
-
-  const saveDefaultAssignments = (assignments) => {
-    setDefaultAssignments(assignments);
-    storage.set('defaultAssignments', JSON.stringify(assignments));
-  };
-
-  const addTeamMember = async (memberData) => {
-    const newMember = {
-      id: Date.now().toString(), ...memberData,
-      role: memberData.role || 'member', notificationPreference: 'email'
-    };
-    await saveTeamMembers([...teamMembers, newMember]);
-  };
-
-  const removeTeamMember = async (memberId) => {
-    await saveTeamMembers(teamMembers.filter(m => m.id !== memberId));
-    const newAssignments = { ...defaultAssignments };
-    Object.keys(newAssignments).forEach(taskId => {
-      if (newAssignments[taskId] === memberId) delete newAssignments[taskId];
-    });
-    saveDefaultAssignments(newAssignments);
-  };
-
-  const updateTeamMember = async (memberId, updates) => {
-    const updated = teamMembers.map(m => m.id === memberId ? { ...m, ...updates } : m);
-    await saveTeamMembers(updated);
-    const updatedMember = updated.find(m => m.id === memberId);
-    if (user && updatedMember && user.email === updatedMember.email) {
-      const newUser = { ...user, firstName: updatedMember.firstName, lastName: updatedMember.lastName };
-      setUser(newUser);
-      storage.set('user', JSON.stringify(newUser));
+      const orgData = await loadOrgDataFromFirestore(userData.orgId);
+      setTeamMembers(orgData.members || []);
+      setProjects(
+        (orgData.projects || []).map(p => ({ ...p, status: p.status || 'active' }))
+      );
+      setDefaultAssignments(orgData.defaultAssignments || {});
+    } catch (error) {
+      console.error('Error loading org data:', error);
     }
   };
 
-  const getDealTitle = (deal) => {
-    if (!deal) return '';
-    return deal.type === 'Buyer' ? (deal.clientName || 'New Buyer Deal') : (deal.propertyAddress || 'New Seller Deal');
+  // ============================================
+  // AUTH STATE LISTENER (auto-login on page refresh)
+  // ============================================
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.emailVerified) {
+        try {
+          const profile = await getUserProfile(firebaseUser.uid);
+          if (profile && profile.orgId) {
+            const userData = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              firstName: profile.firstName || '',
+              lastName: profile.lastName || '',
+              orgId: profile.orgId,
+              platformRole: profile.platformRole || 'user',
+            };
+            setUser(userData);
+            setOrgId(profile.orgId);
+            await initializeOrg(userData);
+          }
+        } catch (error) {
+          console.error('Error restoring session:', error);
+        }
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ============================================
+  // LOGIN CALLBACK (from LoginScreen)
+  // ============================================
+  const handleLogin = async (userData) => {
+    setUser(userData);
+    setOrgId(userData.orgId);
+    if (userData.orgId) {
+      setLoading(true);
+      await initializeOrg(userData);
+      setLoading(false);
+    }
   };
 
-  const isAdmin = () => {
-    if (!user || teamMembers.length === 0) return true;
-    const currentMember = teamMembers.find(m => m.email === user.email);
-    return currentMember?.role === 'admin' || teamMembers[0]?.email === user.email;
-  };
-
-  const getCurrentUserMember = () => teamMembers.find(m => m.email === user?.email);
-
-  const calculateDueDate = (startDate, offset) => {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + offset);
-    return date.toISOString().split('T')[0];
-  };
-
+  // ============================================
+  // PROJECT CRUD
+  // ============================================
   const createProject = async (projectData) => {
-    if (!isAdmin()) { alert('Permission denied: Only Admins can create new deals.'); return; }
+    if (!isAdmin()) {
+      alert('Permission denied: Only Admins can create new deals.');
+      return;
+    }
     const template = projectData.type === 'Buyer' ? BUYER_TEMPLATE : SELLER_TEMPLATE;
-    const newProject = {
-      id: Date.now().toString(), ...projectData, status: 'active',
-      createdAt: new Date().toISOString(),
-      tasks: template.flatMap(themeGroup =>
-        themeGroup.activities.map((activity, idx) => {
-          const taskType = projectData.type === 'Buyer' ? 'buyer' : 'seller';
-          const taskKey = `${taskType}-${themeGroup.theme}-${activity.name}`;
-          const defaultAssigneeId = defaultAssignments[taskKey];
-          const defaultAssignee = defaultAssigneeId ? teamMembers.find(m => m.id === defaultAssigneeId) : null;
-          return {
-            id: `${themeGroup.group}-${idx}`, theme: themeGroup.theme,
-            name: activity.name, notes: activity.notes, status: 'not-started',
-            dueDate: projectData.contractDate && activity.daysOffset
-              ? calculateDueDate(projectData.contractDate, activity.daysOffset) : null,
-            userNotes: '',
-            assignedTo: defaultAssignee ? `${defaultAssignee.firstName} ${defaultAssignee.lastName}` : ''
-          };
-        })
-      )
+
+    // Prepare project doc (no tasks — those go in subcollection)
+    const projectDoc = {
+      type: projectData.type,
+      clientName: projectData.clientName || '',
+      propertyAddress: projectData.propertyAddress || '',
+      phone: projectData.phone || '',
+      email: projectData.email || '',
+      contractDate: projectData.contractDate || '',
+      status: 'active',
+      listPrice: projectData.listPrice || '',
+      contractPrice: projectData.contractPrice || '',
+      commissionPercent: projectData.commissionPercent || '',
+      brokerSplitType: projectData.brokerSplitType || '',
+      brokerSplitValue: projectData.brokerSplitValue || '',
+      transactionFee: projectData.transactionFee || '',
+      tcFee: projectData.tcFee || '',
     };
-    await saveProjects([...projects, newProject]);
+
+    // 1. Create project in Firestore
+    const projectId = await fsCreateProject(orgId, projectDoc);
+
+    // 2. Build tasks from template
+    const tasks = template.flatMap(themeGroup =>
+      themeGroup.activities.map((activity, idx) => {
+        const taskType = projectData.type === 'Buyer' ? 'buyer' : 'seller';
+        const taskKey = `${taskType}-${themeGroup.theme}-${activity.name}`;
+        const defaultAssigneeId = defaultAssignments[taskKey];
+        const defaultAssignee = defaultAssigneeId
+          ? teamMembers.find(m => m.id === defaultAssigneeId)
+          : null;
+        return {
+          theme: themeGroup.theme,
+          name: activity.name,
+          notes: activity.notes,
+          status: 'not-started',
+          dueDate:
+            projectData.contractDate && activity.daysOffset
+              ? calculateDueDate(projectData.contractDate, activity.daysOffset)
+              : null,
+          userNotes: '',
+          assignedTo: defaultAssignee
+            ? `${defaultAssignee.firstName} ${defaultAssignee.lastName}`
+            : '',
+        };
+      })
+    );
+
+    // 3. Batch write tasks to Firestore subcollection
+    await fsCreateTasks(orgId, projectId, tasks);
+
+    // 4. Load tasks back to get their Firestore IDs
+    const loadedTasks = await fsGetTasks(orgId, projectId);
+
+    const newProject = { id: projectId, ...projectDoc, tasks: loadedTasks };
+
+    setProjects(prev => [...prev, newProject]);
     setShowNewProjectModal(false);
     setSelectedProject(newProject);
     setCurrentView('project');
   };
 
   const updateProject = async (projectId, updates) => {
-    const updated = projects.map(p => p.id === projectId ? { ...p, ...updates } : p);
-    await saveProjects(updated);
-    if (selectedProject?.id === projectId) setSelectedProject({ ...selectedProject, ...updates });
+    // Separate tasks from project-level updates (tasks live in subcollection)
+    const { tasks, id, ...projectUpdates } = updates;
+
+    if (Object.keys(projectUpdates).length > 0) {
+      await fsUpdateProject(orgId, projectId, projectUpdates);
+    }
+
+    const updated = projects.map(p =>
+      p.id === projectId ? { ...p, ...updates } : p
+    );
+    setProjects(updated);
+    if (selectedProject?.id === projectId) {
+      setSelectedProject({ ...selectedProject, ...updates });
+    }
   };
 
   const archiveProject = async () => {
@@ -184,29 +223,204 @@ const App = () => {
     setCurrentView('dashboard');
   };
 
-  const unarchiveProject = async (projectId) => { await updateProject(projectId, { status: 'active' }); };
+  const unarchiveProject = async (projectId) => {
+    await updateProject(projectId, { status: 'active' });
+  };
 
   const deleteProject = async (projectId = null) => {
     const idToDelete = projectId || selectedProject?.id;
     if (!idToDelete) return;
-    await saveProjects(projects.filter(p => p.id !== idToDelete));
-    setShowDeleteModal(false); setDealToDelete(null);
-    if (selectedProject?.id === idToDelete) { setSelectedProject(null); setCurrentView('dashboard'); }
+
+    await fsDeleteProject(orgId, idToDelete);
+    setProjects(prev => prev.filter(p => p.id !== idToDelete));
+
+    setShowDeleteModal(false);
+    setDealToDelete(null);
+    if (selectedProject?.id === idToDelete) {
+      setSelectedProject(null);
+      setCurrentView('dashboard');
+    }
   };
 
+  // ============================================
+  // TASK CRUD
+  // ============================================
   const updateTask = async (projectId, taskId, updates) => {
+    await fsUpdateTask(orgId, projectId, taskId, updates);
+
     const updated = projects.map(p => {
-      if (p.id === projectId) return { ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t) };
+      if (p.id === projectId) {
+        return {
+          ...p,
+          tasks: p.tasks.map(t => (t.id === taskId ? { ...t, ...updates } : t)),
+        };
+      }
       return p;
     });
-    await saveProjects(updated);
-    if (selectedProject?.id === projectId) setSelectedProject(updated.find(p => p.id === projectId));
+    setProjects(updated);
+    if (selectedProject?.id === projectId) {
+      setSelectedProject(updated.find(p => p.id === projectId));
+    }
+  };
+
+  // ============================================
+  // TEAM MEMBER CRUD
+  // ============================================
+  const addTeamMember = async (memberData) => {
+    const newMember = {
+      ...memberData,
+      role: memberData.role || 'member',
+      notificationPreference: 'email',
+    };
+    const memberId = await fsAddMember(orgId, newMember);
+    setTeamMembers(prev => [...prev, { id: memberId, ...newMember }]);
+  };
+
+  const removeTeamMember = async (memberId) => {
+    await fsDeleteMember(orgId, memberId);
+    setTeamMembers(prev => prev.filter(m => m.id !== memberId));
+
+    // Clean up default assignments for removed member
+    const newAssignments = { ...defaultAssignments };
+    Object.keys(newAssignments).forEach(taskId => {
+      if (newAssignments[taskId] === memberId) delete newAssignments[taskId];
+    });
+    handleSaveDefaultAssignments(newAssignments);
+  };
+
+  const updateTeamMember = async (memberId, updates) => {
+    await fsUpdateMember(orgId, memberId, updates);
+
+    const updated = teamMembers.map(m =>
+      m.id === memberId ? { ...m, ...updates } : m
+    );
+    setTeamMembers(updated);
+
+    // If the user updated their own profile, reflect it
+    const updatedMember = updated.find(m => m.id === memberId);
+    if (user && updatedMember && user.email === updatedMember.email) {
+      setUser(prev => ({
+        ...prev,
+        firstName: updatedMember.firstName,
+        lastName: updatedMember.lastName,
+      }));
+    }
+  };
+
+  // ============================================
+  // DEFAULT ASSIGNMENTS
+  // ============================================
+  const handleSaveDefaultAssignments = async (assignments) => {
+    setDefaultAssignments(assignments);
+    await fsSaveDefaultAssignments(orgId, assignments);
+  };
+
+  // ============================================
+  // LOGOUT
+  // ============================================
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
+    setUser(null);
+    setOrgId(null);
+    setProjects([]);
+    setTeamMembers([]);
+    setDefaultAssignments({});
+    setCurrentView('pipeline');
+    setSelectedProject(null);
+    setSelectedTask(null);
+    setImpersonation(null);
+    setOriginalOrgId(null);
+    setOriginalProjects(null);
+    setOriginalTeamMembers(null);
+    setOriginalDefaultAssignments(null);
+  };
+
+  // ============================================
+  // IMPERSONATION (SuperAdmin only)
+  // ============================================
+  const handleImpersonate = async ({ orgId: targetOrgId, orgName, memberName, memberEmail }) => {
+    // Save current state so we can restore it later
+    setOriginalOrgId(orgId);
+    setOriginalProjects(projects);
+    setOriginalTeamMembers(teamMembers);
+    setOriginalDefaultAssignments(defaultAssignments);
+
+    // Load target org's data
+    try {
+      const orgData = await loadOrgDataForImpersonation(targetOrgId);
+      setOrgId(targetOrgId);
+      setProjects(
+        (orgData.projects || []).map(p => ({ ...p, status: p.status || 'active' }))
+      );
+      setTeamMembers(orgData.members || []);
+      setDefaultAssignments({});
+      setImpersonation({ orgId: targetOrgId, orgName, memberName, memberEmail });
+      setCurrentView('pipeline');
+      setSelectedProject(null);
+      setSelectedTask(null);
+    } catch (error) {
+      console.error('Error impersonating:', error);
+      alert('Failed to load organization data.');
+      setOriginalOrgId(null);
+      setOriginalProjects(null);
+      setOriginalTeamMembers(null);
+      setOriginalDefaultAssignments(null);
+    }
+  };
+
+  const handleExitImpersonation = () => {
+    // Restore original state
+    setOrgId(originalOrgId);
+    setProjects(originalProjects || []);
+    setTeamMembers(originalTeamMembers || []);
+    setDefaultAssignments(originalDefaultAssignments || {});
+    setImpersonation(null);
+    setOriginalOrgId(null);
+    setOriginalProjects(null);
+    setOriginalTeamMembers(null);
+    setOriginalDefaultAssignments(null);
+    setCurrentView('superAdmin');
+    setSelectedProject(null);
+    setSelectedTask(null);
+  };
+
+  // ============================================
+  // HELPERS (unchanged logic)
+  // ============================================
+  const getDealTitle = (deal) => {
+    if (!deal) return '';
+    return deal.type === 'Buyer'
+      ? deal.clientName || 'New Buyer Deal'
+      : deal.propertyAddress || 'New Seller Deal';
+  };
+
+  const isAdmin = () => {
+    if (!user || teamMembers.length === 0) return true;
+    const currentMember = teamMembers.find(m => m.email === user.email);
+    return currentMember?.role === 'admin' || teamMembers[0]?.email === user.email;
+  };
+
+  const isSuperAdmin = () => user?.platformRole === 'superAdmin';
+
+  const getCurrentUserMember = () =>
+    teamMembers.find(m => m.email === user?.email);
+
+  const calculateDueDate = (startDate, offset) => {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + offset);
+    return date.toISOString().split('T')[0];
   };
 
   const isTaskUrgent = (task) => {
     if (task.status === 'complete') return false;
     if (!task.dueDate) return false;
-    const diffDays = Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.ceil(
+      (new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24)
+    );
     return diffDays < 0 || diffDays <= 3;
   };
 
@@ -220,11 +434,20 @@ const App = () => {
   const getDueSoonTasks = () => {
     const active = projects.filter(p => p.status === 'active');
     const allTasks = active.flatMap(p =>
-      p.tasks.map(t => ({ ...t, projectName: p.propertyAddress, projectId: p.id, projectClientName: p.clientName, projectType: p.type }))
+      p.tasks.map(t => ({
+        ...t,
+        projectName: p.propertyAddress,
+        projectId: p.id,
+        projectClientName: p.clientName,
+        projectType: p.type,
+      }))
     );
     return allTasks.filter(t => {
-      if (!t.dueDate || t.status === 'complete' || t.status === 'not-applicable') return false;
-      const diffDays = Math.ceil((new Date(t.dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+      if (!t.dueDate || t.status === 'complete' || t.status === 'not-applicable')
+        return false;
+      const diffDays = Math.ceil(
+        (new Date(t.dueDate) - new Date()) / (1000 * 60 * 60 * 24)
+      );
       return diffDays >= 0 && diffDays <= 3;
     });
   };
@@ -232,10 +455,17 @@ const App = () => {
   const getOverdueTasks = () => {
     const active = projects.filter(p => p.status === 'active');
     const allTasks = active.flatMap(p =>
-      p.tasks.map(t => ({ ...t, projectName: p.propertyAddress, projectId: p.id, projectClientName: p.clientName, projectType: p.type }))
+      p.tasks.map(t => ({
+        ...t,
+        projectName: p.propertyAddress,
+        projectId: p.id,
+        projectClientName: p.clientName,
+        projectType: p.type,
+      }))
     );
     return allTasks.filter(t => {
-      if (!t.dueDate || t.status === 'complete' || t.status === 'not-applicable') return false;
+      if (!t.dueDate || t.status === 'complete' || t.status === 'not-applicable')
+        return false;
       return new Date(t.dueDate) < new Date();
     });
   };
@@ -243,13 +473,24 @@ const App = () => {
   const getMyTasks = () => {
     const active = projects.filter(p => p.status === 'active');
     const allTasks = active.flatMap(p =>
-      p.tasks.map(t => ({ ...t, projectName: p.propertyAddress, projectId: p.id, projectClientName: p.clientName, projectType: p.type }))
+      p.tasks.map(t => ({
+        ...t,
+        projectName: p.propertyAddress,
+        projectId: p.id,
+        projectClientName: p.clientName,
+        projectType: p.type,
+      }))
     );
-    const normalizedUserName = user ? `${user.firstName} ${user.lastName || ''}`.trim().toLowerCase() : '';
+    const normalizedUserName = user
+      ? `${user.firstName} ${user.lastName || ''}`.trim().toLowerCase()
+      : '';
     return allTasks.filter(t => {
       if (!t.assignedTo) return false;
-      return t.assignedTo.toLowerCase().trim() === normalizedUserName
-        && t.status !== 'complete' && t.status !== 'not-applicable';
+      return (
+        t.assignedTo.toLowerCase().trim() === normalizedUserName &&
+        t.status !== 'complete' &&
+        t.status !== 'not-applicable'
+      );
     });
   };
 
@@ -257,7 +498,13 @@ const App = () => {
     const grouped = {};
     tasks.forEach(task => {
       if (!grouped[task.projectId]) {
-        grouped[task.projectId] = { projectId: task.projectId, projectName: task.projectName, projectClientName: task.projectClientName, tasks: [], taskCount: 0 };
+        grouped[task.projectId] = {
+          projectId: task.projectId,
+          projectName: task.projectName,
+          projectClientName: task.projectClientName,
+          tasks: [],
+          taskCount: 0,
+        };
       }
       grouped[task.projectId].tasks.push(task);
       grouped[task.projectId].taskCount++;
@@ -269,185 +516,366 @@ const App = () => {
   const getOverdueTasksGroupedByDeal = () => groupTasksByDeal(getOverdueTasks());
   const getDueSoonTasksGroupedByDeal = () => groupTasksByDeal(getDueSoonTasks());
 
-  const handleLogout = async () => {
-    try { await signOut(auth); } catch (e) { console.error("Logout error:", e); }
-    storage.delete("user");
-    setUser(null); setCurrentView("pipeline"); setSelectedProject(null); setSelectedTask(null);
+  // --- Shared callbacks (unchanged) ---
+  const handleSelectProject = (p) => {
+    setSelectedProject(p);
+    setCurrentView('project');
   };
 
-  // --- Shared callbacks ---
-  const handleSelectProject = (p) => { setSelectedProject(p); setCurrentView('project'); };
   const handleOpenMyProfile = () => {
     const member = getCurrentUserMember();
-    if (member) { setEditProfileMember(member); setEditProfileMode('self'); setShowEditProfileModal(true); }
+    if (member) {
+      setEditProfileMember(member);
+      setEditProfileMode('self');
+      setShowEditProfileModal(true);
+    }
   };
-  const handleEditTeamMember = (member) => { setEditProfileMember(member); setEditProfileMode('admin'); setShowEditProfileModal(true); };
-  const handleCloseEditProfile = () => { setShowEditProfileModal(false); setEditProfileMember(null); };
-  const handleSaveEditProfile = (memberId, updates) => { updateTeamMember(memberId, updates); setShowEditProfileModal(false); setEditProfileMember(null); };
 
-  const handleMyTasksDealClick = (deal, type) => { setMyTasksModalDeal(deal); setMyTasksModalType(type); setShowMyTasksModal(true); };
-  const handleCloseMyTasksModal = () => { setShowMyTasksModal(false); setMyTasksModalDeal(null); setMyTasksModalType('assigned'); };
-  const handleMyTasksTaskClick = (task) => {
-    const project = projects.filter(p => p.status === 'active').find(p => p.id === task.projectId);
-    setTaskDetailTask(task); setTaskDetailProject(project); setShowTaskDetailModal(true);
+  const handleEditTeamMember = (member) => {
+    setEditProfileMember(member);
+    setEditProfileMode('admin');
+    setShowEditProfileModal(true);
   };
-  const handleCloseTaskDetail = () => { setShowTaskDetailModal(false); setTaskDetailTask(null); setTaskDetailProject(null); };
+
+  const handleCloseEditProfile = () => {
+    setShowEditProfileModal(false);
+    setEditProfileMember(null);
+  };
+
+  const handleSaveEditProfile = (memberId, updates) => {
+    updateTeamMember(memberId, updates);
+    setShowEditProfileModal(false);
+    setEditProfileMember(null);
+  };
+
+  const handleMyTasksDealClick = (deal, type) => {
+    setMyTasksModalDeal(deal);
+    setMyTasksModalType(type);
+    setShowMyTasksModal(true);
+  };
+
+  const handleCloseMyTasksModal = () => {
+    setShowMyTasksModal(false);
+    setMyTasksModalDeal(null);
+    setMyTasksModalType('assigned');
+  };
+
+  const handleMyTasksTaskClick = (task) => {
+    const project = projects
+      .filter(p => p.status === 'active')
+      .find(p => p.id === task.projectId);
+    setTaskDetailTask(task);
+    setTaskDetailProject(project);
+    setShowTaskDetailModal(true);
+  };
+
+  const handleCloseTaskDetail = () => {
+    setShowTaskDetailModal(false);
+    setTaskDetailTask(null);
+    setTaskDetailProject(null);
+  };
+
   const handleTaskDetailUpdate = (updates) => {
     updateTask(taskDetailTask.projectId, taskDetailTask.id, updates);
     if (myTasksModalDeal) {
-      const updatedTasks = myTasksModalDeal.tasks.map(t => t.id === taskDetailTask.id ? { ...t, ...updates } : t);
+      const updatedTasks = myTasksModalDeal.tasks.map(t =>
+        t.id === taskDetailTask.id ? { ...t, ...updates } : t
+      );
       if (updates.status === 'complete') {
         const remaining = updatedTasks.filter(t => t.status !== 'complete');
-        if (remaining.length === 0) { setShowMyTasksModal(false); setMyTasksModalDeal(null); setMyTasksModalType('assigned'); }
-        else { setMyTasksModalDeal({ ...myTasksModalDeal, tasks: remaining, taskCount: remaining.length }); }
-      } else { setMyTasksModalDeal({ ...myTasksModalDeal, tasks: updatedTasks }); }
+        if (remaining.length === 0) {
+          setShowMyTasksModal(false);
+          setMyTasksModalDeal(null);
+          setMyTasksModalType('assigned');
+        } else {
+          setMyTasksModalDeal({
+            ...myTasksModalDeal,
+            tasks: remaining,
+            taskCount: remaining.length,
+          });
+        }
+      } else {
+        setMyTasksModalDeal({ ...myTasksModalDeal, tasks: updatedTasks });
+      }
     }
-    setShowTaskDetailModal(false); setTaskDetailTask(null); setTaskDetailProject(null);
+    setShowTaskDetailModal(false);
+    setTaskDetailTask(null);
+    setTaskDetailProject(null);
   };
 
-  const handleDeleteDeal = (project) => { setDealToDelete(project); setShowDeleteModal(true); };
-  const handleConfirmDelete = () => { deleteProject(dealToDelete.id); };
-  const handleCancelDelete = () => { setShowDeleteModal(false); setDealToDelete(null); };
+  const handleDeleteDeal = (project) => {
+    setDealToDelete(project);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = () => {
+    deleteProject(dealToDelete.id);
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setDealToDelete(null);
+  };
 
   // --- Render ---
-  if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  if (!user) return <LoginScreen onLogin={saveUser} />;
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-screen">Loading...</div>
+    );
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
 
   const activeProjects = projects.filter(p => p.status === 'active');
   const archivedProjects = projects.filter(p => p.status === 'archived');
 
   // Shared sidebar props
   const sidebarProps = {
-    projects: activeProjects, onSelectProject: handleSelectProject,
-    onPipeline: () => setCurrentView('pipeline'), onDashboard: () => setCurrentView('dashboard'),
-    onArchive: () => setCurrentView('archive'), onNewProject: () => setShowNewProjectModal(true),
-    onTeamSettings: () => setCurrentView('teamSettings'), onMyProfile: handleOpenMyProfile,
-    onLogout: handleLogout, currentView, getDealTitle, isAdmin: isAdmin(),
+    projects: activeProjects,
+    onSelectProject: handleSelectProject,
+    onPipeline: () => setCurrentView('pipeline'),
+    onDashboard: () => setCurrentView('dashboard'),
+    onArchive: () => setCurrentView('archive'),
+    onNewProject: () => setShowNewProjectModal(true),
+    onTeamSettings: () => setCurrentView('teamSettings'),
+    onMyProfile: handleOpenMyProfile,
+    onSuperAdmin: () => setCurrentView('superAdmin'),
+    onLogout: handleLogout,
+    currentView,
+    getDealTitle,
+    isAdmin: isAdmin(),
+    isSuperAdmin: isSuperAdmin(),
   };
 
-  if (currentView === 'pipeline') {
+  // --- Impersonation Banner (fixed position — shows on ALL views) ---
+  const ImpersonationBanner = () => {
+    if (!impersonation) return null;
+    return (
+      <div
+        className="fixed top-0 left-0 right-0 flex items-center justify-between px-4 py-2"
+        style={{ backgroundColor: '#E53E3E', color: '#FFFFFF', zIndex: 9999 }}
+      >
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Eye className="w-4 h-4" />
+          Viewing as {impersonation.memberName} — {impersonation.orgName}
+        </div>
+        <button
+          onClick={handleExitImpersonation}
+          className="px-3 py-1 rounded text-sm font-semibold"
+          style={{ backgroundColor: '#FFFFFF', color: '#E53E3E' }}
+        >
+          Exit Impersonation
+        </button>
+      </div>
+    );
+  };
+
+  // Padding to push content below the fixed banner
+  const impersonationPadding = impersonation ? { paddingTop: '40px' } : {};
+
+  if (currentView === 'superAdmin' && isSuperAdmin()) {
     return (
       <div className="flex h-screen" style={{ backgroundColor: '#FFFFFF' }}>
         <Sidebar {...sidebarProps} />
-        <div className="flex-1 overflow-auto">
-          <SalesPipeline projects={activeProjects} getDealTitle={getDealTitle} />
-        </div>
-        {showNewProjectModal && (
-          <NewProjectModal onClose={() => setShowNewProjectModal(false)} onSave={createProject} />
-        )}
+        <SuperAdminDashboard onImpersonate={handleImpersonate} />
       </div>
+    );
+  }
+
+  if (currentView === 'pipeline') {
+    return (
+      <>
+        <ImpersonationBanner />
+        <div className="flex h-screen" style={{ backgroundColor: '#FFFFFF', ...impersonationPadding }}>
+          <Sidebar {...sidebarProps} />
+          <div className="flex-1 overflow-auto">
+            <SalesPipeline projects={activeProjects} getDealTitle={getDealTitle} />
+          </div>
+          {showNewProjectModal && (
+            <NewProjectModal
+              onClose={() => setShowNewProjectModal(false)}
+              onSave={createProject}
+            />
+          )}
+        </div>
+      </>
     );
   }
 
   if (currentView === 'dashboard') {
     return (
-      <DashboardView
-        user={user} activeProjects={activeProjects} teamMembers={teamMembers} currentView={currentView}
+      <>
+        <ImpersonationBanner />
+        <div style={impersonationPadding}>
+          <DashboardView
+        user={user}
+        activeProjects={activeProjects}
+        teamMembers={teamMembers}
+        currentView={currentView}
         {...sidebarProps}
-        getTaskColor={getTaskColor} isTaskUrgent={isTaskUrgent}
-        getMyTasks={getMyTasks} getDueSoonTasks={getDueSoonTasks} getOverdueTasks={getOverdueTasks}
+        getTaskColor={getTaskColor}
+        isTaskUrgent={isTaskUrgent}
+        getMyTasks={getMyTasks}
+        getDueSoonTasks={getDueSoonTasks}
+        getOverdueTasks={getOverdueTasks}
         getMyTasksGroupedByDeal={getMyTasksGroupedByDeal}
         getDueSoonTasksGroupedByDeal={getDueSoonTasksGroupedByDeal}
         getOverdueTasksGroupedByDeal={getOverdueTasksGroupedByDeal}
         showNewProjectModal={showNewProjectModal}
-        onCloseNewProject={() => setShowNewProjectModal(false)} createProject={createProject}
+        onCloseNewProject={() => setShowNewProjectModal(false)}
+        createProject={createProject}
         showTeamModal={showTeamModal}
         onCloseTeamModal={() => setShowTeamModal(false)}
-        addTeamMember={addTeamMember} removeTeamMember={removeTeamMember}
+        addTeamMember={addTeamMember}
+        removeTeamMember={removeTeamMember}
         onEditTeamMember={handleEditTeamMember}
-        showEditProfileModal={showEditProfileModal} editProfileMember={editProfileMember}
+        showEditProfileModal={showEditProfileModal}
+        editProfileMember={editProfileMember}
         editProfileMode={editProfileMode}
-        onCloseEditProfile={handleCloseEditProfile} onSaveEditProfile={handleSaveEditProfile}
-        showMyTasksModal={showMyTasksModal} myTasksModalDeal={myTasksModalDeal}
+        onCloseEditProfile={handleCloseEditProfile}
+        onSaveEditProfile={handleSaveEditProfile}
+        showMyTasksModal={showMyTasksModal}
+        myTasksModalDeal={myTasksModalDeal}
         myTasksModalType={myTasksModalType}
-        onCloseMyTasksModal={handleCloseMyTasksModal} onMyTasksDealClick={handleMyTasksDealClick}
+        onCloseMyTasksModal={handleCloseMyTasksModal}
+        onMyTasksDealClick={handleMyTasksDealClick}
         onMyTasksTaskClick={handleMyTasksTaskClick}
-        showTaskDetailModal={showTaskDetailModal} taskDetailTask={taskDetailTask}
+        showTaskDetailModal={showTaskDetailModal}
+        taskDetailTask={taskDetailTask}
         taskDetailProject={taskDetailProject}
-        onCloseTaskDetail={handleCloseTaskDetail} onTaskDetailUpdate={handleTaskDetailUpdate}
+        onCloseTaskDetail={handleCloseTaskDetail}
+        onTaskDetailUpdate={handleTaskDetailUpdate}
       />
+        </div>
+      </>
     );
   }
 
   if (currentView === 'teamSettings') {
     return (
-      <div className="flex h-screen" style={{ backgroundColor: '#FFFFFF' }}>
+      <>
+        <ImpersonationBanner />
+        <div className="flex h-screen" style={{ backgroundColor: '#FFFFFF', ...impersonationPadding }}>
         <Sidebar {...sidebarProps} />
         <div className="flex-1 overflow-auto">
           <TeamSettings
-            teamMembers={teamMembers} onAddMember={addTeamMember}
+            teamMembers={teamMembers}
+            onAddMember={addTeamMember}
             onRemoveMember={removeTeamMember}
             onEditMember={handleEditTeamMember}
             defaultAssignments={defaultAssignments}
-            onSaveDefaults={saveDefaultAssignments}
-            sellerTemplate={SELLER_TEMPLATE} buyerTemplate={BUYER_TEMPLATE}
+            onSaveDefaults={handleSaveDefaultAssignments}
+            sellerTemplate={SELLER_TEMPLATE}
+            buyerTemplate={BUYER_TEMPLATE}
             isAdmin={isAdmin()}
           />
         </div>
         {showEditProfileModal && editProfileMember && (
           <EditProfileModal
-            member={editProfileMember} mode={editProfileMode}
-            isAdmin={isAdmin()} onClose={handleCloseEditProfile} onSave={handleSaveEditProfile}
+            member={editProfileMember}
+            mode={editProfileMode}
+            isAdmin={isAdmin()}
+            onClose={handleCloseEditProfile}
+            onSave={handleSaveEditProfile}
           />
         )}
         {showNewProjectModal && (
-          <NewProjectModal onClose={() => setShowNewProjectModal(false)} onSave={createProject} />
+          <NewProjectModal
+            onClose={() => setShowNewProjectModal(false)}
+            onSave={createProject}
+          />
         )}
       </div>
+      </>
     );
   }
 
   if (currentView === 'archive') {
     return (
-      <ArchiveView
-        activeProjects={activeProjects} archivedProjects={archivedProjects}
-        teamMembers={teamMembers} currentView={currentView}
-        {...sidebarProps}
-        unarchiveProject={unarchiveProject} onDeleteDeal={handleDeleteDeal}
-        showNewProjectModal={showNewProjectModal}
-        onCloseNewProject={() => setShowNewProjectModal(false)} createProject={createProject}
-        showTeamModal={showTeamModal} onCloseTeamModal={() => setShowTeamModal(false)}
-        addTeamMember={addTeamMember} removeTeamMember={removeTeamMember}
-        onEditTeamMember={handleEditTeamMember}
-        showDeleteModal={showDeleteModal} dealToDelete={dealToDelete}
-        onConfirmDelete={handleConfirmDelete} onCancelDelete={handleCancelDelete}
-        showEditProfileModal={showEditProfileModal} editProfileMember={editProfileMember}
-        editProfileMode={editProfileMode}
-        onCloseEditProfile={handleCloseEditProfile} onSaveEditProfile={handleSaveEditProfile}
-      />
+      <>
+        <ImpersonationBanner />
+        <div style={impersonationPadding}>
+          <ArchiveView
+            activeProjects={activeProjects}
+            archivedProjects={archivedProjects}
+            teamMembers={teamMembers}
+            currentView={currentView}
+            {...sidebarProps}
+            unarchiveProject={unarchiveProject}
+            onDeleteDeal={handleDeleteDeal}
+            showNewProjectModal={showNewProjectModal}
+            onCloseNewProject={() => setShowNewProjectModal(false)}
+            createProject={createProject}
+            showTeamModal={showTeamModal}
+            onCloseTeamModal={() => setShowTeamModal(false)}
+            addTeamMember={addTeamMember}
+            removeTeamMember={removeTeamMember}
+            onEditTeamMember={handleEditTeamMember}
+            showDeleteModal={showDeleteModal}
+            dealToDelete={dealToDelete}
+            onConfirmDelete={handleConfirmDelete}
+            onCancelDelete={handleCancelDelete}
+            showEditProfileModal={showEditProfileModal}
+            editProfileMember={editProfileMember}
+            editProfileMode={editProfileMode}
+            onCloseEditProfile={handleCloseEditProfile}
+            onSaveEditProfile={handleSaveEditProfile}
+          />
+        </div>
+      </>
     );
   }
 
   // Project detail view
   return (
-    <ProjectView
-      activeProjects={activeProjects} selectedProject={selectedProject}
-      selectedTask={selectedTask} teamMembers={teamMembers} currentView={currentView}
+    <>
+      <ImpersonationBanner />
+      <div style={impersonationPadding}>
+        <ProjectView
+      activeProjects={activeProjects}
+      selectedProject={selectedProject}
+      selectedTask={selectedTask}
+      teamMembers={teamMembers}
+      currentView={currentView}
       {...sidebarProps}
-      getTaskColor={getTaskColor} isTaskUrgent={isTaskUrgent}
-      onTaskClick={setSelectedTask} updateProject={updateProject}
+      getTaskColor={getTaskColor}
+      isTaskUrgent={isTaskUrgent}
+      onTaskClick={setSelectedTask}
+      updateProject={updateProject}
       onCloseTask={() => setSelectedTask(null)}
-      onUpdateTask={(updates) => updateTask(selectedProject.id, selectedTask.id, updates)}
+      onUpdateTask={(updates) =>
+        updateTask(selectedProject.id, selectedTask.id, updates)
+      }
       showNewProjectModal={showNewProjectModal}
-      onCloseNewProject={() => setShowNewProjectModal(false)} createProject={createProject}
-      showTeamModal={showTeamModal} onCloseTeamModal={() => setShowTeamModal(false)}
-      addTeamMember={addTeamMember} removeTeamMember={removeTeamMember}
+      onCloseNewProject={() => setShowNewProjectModal(false)}
+      createProject={createProject}
+      showTeamModal={showTeamModal}
+      onCloseTeamModal={() => setShowTeamModal(false)}
+      addTeamMember={addTeamMember}
+      removeTeamMember={removeTeamMember}
       onEditTeamMember={handleEditTeamMember}
-      showEditProfileModal={showEditProfileModal} editProfileMember={editProfileMember}
+      showEditProfileModal={showEditProfileModal}
+      editProfileMember={editProfileMember}
       editProfileMode={editProfileMode}
-      onCloseEditProfile={handleCloseEditProfile} onSaveEditProfile={handleSaveEditProfile}
+      onCloseEditProfile={handleCloseEditProfile}
+      onSaveEditProfile={handleSaveEditProfile}
       showArchiveModal={showArchiveModal}
       onOpenArchiveModal={() => setShowArchiveModal(true)}
       onArchiveProject={archiveProject}
       onCloseArchiveModal={() => setShowArchiveModal(false)}
-      showDeleteModal={showDeleteModal} dealToDelete={dealToDelete}
-      onDeleteDeal={handleDeleteDeal} onConfirmDelete={handleConfirmDelete}
+      showDeleteModal={showDeleteModal}
+      dealToDelete={dealToDelete}
+      onDeleteDeal={handleDeleteDeal}
+      onConfirmDelete={handleConfirmDelete}
       onCancelDelete={handleCancelDelete}
       showEditProjectModal={showEditProjectModal}
       onOpenEditProject={() => setShowEditProjectModal(true)}
       onCloseEditProject={() => setShowEditProjectModal(false)}
-      onSaveEditProject={(updates) => { updateProject(selectedProject.id, updates); setShowEditProjectModal(false); }}
+      onSaveEditProject={(updates) => {
+        updateProject(selectedProject.id, updates);
+        setShowEditProjectModal(false);
+      }}
     />
+      </div>
+    </>
   );
 };
 
