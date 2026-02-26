@@ -10,6 +10,7 @@ import {
 import {
   getAllTickets, updateTicketStatus, updateTicketPriority, addTicketMessage
 } from '../../services/supportTicketService';
+import PRICING_TIERS from '../../services/pricingConfig';
 
 const TABS = [
   { id: 'vitals', label: 'Vitals', icon: Activity },
@@ -548,8 +549,17 @@ const VitalsDashboard = () => {
   const totalOrgs = orgs.length;
 
   const trialOrgs = orgs.filter(o => o.plan === 'trial').length;
-  const paidOrgs = orgs.filter(o => o.plan === 'paid').length;
   const cancelledOrgs = orgs.filter(o => o.plan === 'cancelled').length;
+  const starterOrgs = orgs.filter(o => o.plan === 'starter').length;
+  const proOrgs = orgs.filter(o => o.plan === 'pro').length;
+  const enterpriseOrgs = orgs.filter(o => o.plan === 'enterprise').length;
+
+  // MRR calculation
+  const mrr = orgs.reduce((sum, org) => {
+    const tier = PRICING_TIERS[org.plan];
+    return sum + (tier ? tier.monthlyPrice : 0);
+  }, 0);
+  const formatMRR = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(val);
 
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -601,8 +611,41 @@ const VitalsDashboard = () => {
 
       <div className="grid grid-cols-4 gap-4 mb-6">
         <MetricCard icon={CreditCard} label="Trial Accounts" value={trialOrgs} color="#D69E2E" />
-        <MetricCard icon={CreditCard} label="Paid Accounts" value={paidOrgs} color="#2F855A" />
+        <MetricCard icon={CreditCard} label="Starter" value={starterOrgs} color="#2B6CB0" />
+        <MetricCard icon={CreditCard} label="Pro" value={proOrgs} color="#75BB2E" />
+        <MetricCard icon={CreditCard} label="Enterprise" value={enterpriseOrgs} color="#805AD5" />
+      </div>
+
+      {/* MRR Section */}
+      <div className="bg-white rounded-lg shadow p-5 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-xs font-semibold" style={{ color: '#89A8B1' }}>MONTHLY RECURRING REVENUE</p>
+            <p className="text-3xl font-bold" style={{ color: '#75BB2E' }}>{formatMRR(mrr)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs" style={{ color: '#89A8B1' }}>Projected ARR</p>
+            <p className="text-lg font-bold" style={{ color: '#071D39' }}>{formatMRR(mrr * 12)}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-5 gap-3">
+          {Object.entries(PRICING_TIERS).map(([key, tier]) => {
+            const count = orgs.filter(o => o.plan === key).length;
+            return (
+              <div key={key} className="rounded-lg p-3" style={{ backgroundColor: tier.color + '10', border: `1px solid ${tier.color}30` }}>
+                <p className="text-xs font-semibold" style={{ color: tier.color }}>{tier.label}</p>
+                <p className="text-lg font-bold" style={{ color: '#071D39' }}>{count} <span className="text-xs font-normal" style={{ color: '#516469' }}>orgs</span></p>
+                <p className="text-xs" style={{ color: '#516469' }}>{formatMRR(tier.monthlyPrice)}/mo each</p>
+                <p className="text-sm font-semibold mt-1" style={{ color: tier.color }}>{formatMRR(count * tier.monthlyPrice)}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 mb-6">
         <MetricCard icon={AlertTriangle} label="Cancelled" value={cancelledOrgs} color="#E53E3E" />
+        <MetricCard icon={TrendingUp} label="Signups (7d)" value={recentSignups} color="#2F855A" />
         <MetricCard icon={TrendingUp} label="Signups (30d)" value={monthlySignups} color="#805AD5" />
       </div>
 
