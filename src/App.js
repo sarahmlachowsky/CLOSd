@@ -36,7 +36,7 @@ import SuperAdminDashboard from './components/superadmin/SuperAdminDashboard';
 import MyProfilePage from './components/dashboard/MyProfilePage';
 import SupportPage from './components/support/SupportPage';
 import { loadOrgDataForImpersonation } from './services/superAdminService';
-import { sendNewDealNotifications, sendTaskAssignedNotification } from './services/notificationService';
+import { sendNewDealNotifications, sendTaskAssignedNotification, sendDueSoonReminder, sendOverdueAlert } from './services/notificationService';
 
 const App = () => {
   const [user, setUser] = useState(null);
@@ -117,6 +117,34 @@ const App = () => {
     return () => unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ============================================
+  // DUE SOON / OVERDUE CHECK (runs when projects load)
+  // ============================================
+  useEffect(() => {
+    if (!projects.length || !teamMembers.length) return;
+
+    const activeDeals = projects.filter(p => p.status === 'active');
+
+    activeDeals.forEach(deal => {
+      if (!deal.tasks) return;
+      deal.tasks.forEach(task => {
+        if (!task.dueDate || task.status === 'complete' || task.status === 'not-applicable') return;
+        if (!task.assignedTo) return;
+
+        const diffDays = Math.ceil(
+          (new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24)
+        );
+
+        if (diffDays < 0) {
+          sendOverdueAlert(deal, task, teamMembers);
+        } else if (diffDays <= 1) {
+          sendDueSoonReminder(deal, task, teamMembers);
+        }
+      });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects.length]);
 
   // ============================================
   // LOGIN CALLBACK (from LoginScreen)
