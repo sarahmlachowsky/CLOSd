@@ -75,7 +75,7 @@ const TaskDetailPanel = ({ task, project, onClose, onUpdate, teamMembers }) => {
       <div className="p-4 border-t">
         <button
           onClick={handleSave}
-          className="w-full bg-blue-600 text-white p-3 rounded font-semibold hover:bg-blue-700"
+          className="w-full text-white p-3 rounded font-semibold" style={{ backgroundColor: '#75BB2E' }}
         >
           Save Changes
         </button>

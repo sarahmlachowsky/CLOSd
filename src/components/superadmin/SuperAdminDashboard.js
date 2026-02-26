@@ -40,7 +40,7 @@ const SuperAdminDashboard = ({ onImpersonate }) => {
               onClick={() => setActiveTab(tab.id)}
               className="flex items-center gap-2 px-6 py-3 text-sm font-semibold transition-colors"
               style={{
-                borderBottom: isActive ? '3px solid #071D39' : '3px solid transparent',
+                borderBottom: isActive ? '3px solid #75BB2E' : '3px solid transparent',
                 color: isActive ? '#071D39' : '#516469',
                 backgroundColor: isActive ? '#F0F4F5' : 'transparent',
               }}
@@ -272,7 +272,7 @@ const SupportHub = () => {
               <button
                 onClick={() => handleStatusChange(selectedTicket.id, 'resolved')}
                 className="flex items-center gap-1 px-3 py-1 rounded text-xs font-semibold text-white"
-                style={{ backgroundColor: '#16A34A' }}
+                style={{ backgroundColor: '#75BB2E' }}
               >
                 <CheckCircle className="w-3.5 h-3.5" />
                 Resolve
@@ -488,7 +488,7 @@ const SupportHub = () => {
                         handleStatusChange(ticket.id, 'resolved');
                       }}
                       className="flex items-center gap-1 px-3 py-1 rounded text-xs font-semibold text-white flex-shrink-0"
-                      style={{ backgroundColor: '#16A34A' }}
+                      style={{ backgroundColor: '#75BB2E' }}
                       title="Resolve this ticket"
                     >
                       <CheckCircle className="w-3.5 h-3.5" />
