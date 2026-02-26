@@ -36,6 +36,8 @@ import SuperAdminDashboard from './components/superadmin/SuperAdminDashboard';
 import MyProfilePage from './components/dashboard/MyProfilePage';
 import SupportPage from './components/support/SupportPage';
 import { loadOrgDataForImpersonation } from './services/superAdminService';
+import OnboardingWizard from './components/onboarding/OnboardingWizard';
+import { getOrganization } from './services/firestoreService';
 import { sendNewDealNotifications, sendTaskAssignedNotification, sendDueSoonReminder, sendOverdueAlert } from './services/notificationService';
 
 const App = () => {
@@ -63,6 +65,10 @@ const App = () => {
   const [showTaskDetailModal, setShowTaskDetailModal] = useState(false);
   const [taskDetailTask, setTaskDetailTask] = useState(null);
   const [taskDetailProject, setTaskDetailProject] = useState(null);
+
+  // Onboarding state
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStepState] = useState(0);
 
   // Impersonation state
   const [impersonation, setImpersonation] = useState(null);
@@ -107,6 +113,17 @@ const App = () => {
             setUser(userData);
             setOrgId(profile.orgId);
             await initializeOrg(userData);
+
+            // Check onboarding status
+            try {
+              const orgDoc = await getOrganization(profile.orgId);
+              if (orgDoc && !orgDoc.onboardingComplete) {
+                setShowOnboarding(true);
+                setOnboardingStepState(orgDoc.onboardingStep || 0);
+              }
+            } catch (err) {
+              console.error('Error checking onboarding status:', err);
+            }
           }
         } catch (error) {
           console.error('Error restoring session:', error);
@@ -155,6 +172,18 @@ const App = () => {
     if (userData.orgId) {
       setLoading(true);
       await initializeOrg(userData);
+
+      // Check onboarding status
+      try {
+        const orgDoc = await getOrganization(userData.orgId);
+        if (orgDoc && !orgDoc.onboardingComplete) {
+          setShowOnboarding(true);
+          setOnboardingStepState(orgDoc.onboardingStep || 0);
+        }
+      } catch (err) {
+        console.error('Error checking onboarding status:', err);
+      }
+
       setLoading(false);
     }
   };
@@ -661,6 +690,26 @@ const App = () => {
       <div className="flex items-center justify-center h-screen">Loading...</div>
     );
   if (!user) return <LoginScreen onLogin={handleLogin} />;
+
+  // Show onboarding wizard for new orgs
+  if (showOnboarding && !impersonation) {
+    return (
+      <OnboardingWizard
+        orgId={orgId}
+        currentUser={user}
+        initialStep={onboardingStep}
+        onComplete={() => {
+          setShowOnboarding(false);
+          setCurrentView('pipeline');
+        }}
+        onCreateDeal={() => {
+          setShowOnboarding(false);
+          setShowNewProjectModal(true);
+          setCurrentView('pipeline');
+        }}
+      />
+    );
+  }
 
   const activeProjects = projects.filter(p => p.status === 'active');
   const archivedProjects = projects.filter(p => p.status === 'archived');

@@ -168,6 +168,37 @@ export const saveDefaultAssignments = async (orgId, assignments) => {
 };
 
 // ============================================
+// ONBOARDING OPERATIONS
+// ============================================
+
+export const updateOnboardingStep = async (orgId, step) => {
+  await updateDoc(doc(db, 'organizations', orgId), { onboardingStep: step });
+};
+
+export const completeOnboarding = async (orgId) => {
+  await updateDoc(doc(db, 'organizations', orgId), {
+    onboardingComplete: true,
+    onboardingStep: 5,
+  });
+};
+
+export const saveDefaultAssignment = async (orgId, assignment) => {
+  const configRef = doc(db, 'organizations', orgId, 'defaultAssignments', 'config');
+  const snap = await getDoc(configRef);
+  const current = snap.exists() ? snap.data().assignments || {} : {};
+
+  const key = assignment.dealType + '__' + assignment.taskName;
+  current[key] = {
+    dealType: assignment.dealType,
+    taskName: assignment.taskName,
+    assignedTo: assignment.assignedTo,
+    assignedUid: assignment.assignedUid || '',
+  };
+
+  await setDoc(configRef, { assignments: current, updatedAt: serverTimestamp() });
+};
+
+// ============================================
 // HELPER: Load full org data (projects + tasks + members)
 // ============================================
 
