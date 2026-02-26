@@ -9,7 +9,7 @@ const ArchiveView = ({
   activeProjects, archivedProjects, teamMembers, currentView,
   onSelectProject, onPipeline, onDashboard, onArchive, onNewProject,
   onTeamSettings, onMyProfile, onLogout, getDealTitle, isAdmin,
-  unarchiveProject, onDeleteDeal,
+  unarchiveProject, onDeleteDeal, isSuperAdmin, onSuperAdmin, onHelpSupport, user, orgId,
   showNewProjectModal, onCloseNewProject, createProject,
   showTeamModal, onCloseTeamModal, addTeamMember, removeTeamMember, onEditTeamMember,
   showDeleteModal, dealToDelete, onConfirmDelete, onCancelDelete,
@@ -31,6 +31,11 @@ const ArchiveView = ({
         currentView={currentView}
         getDealTitle={getDealTitle}
         isAdmin={isAdmin}
+        isSuperAdmin={isSuperAdmin}
+        onSuperAdmin={onSuperAdmin}
+        onHelpSupport={onHelpSupport}
+        user={user}
+        orgId={orgId}
       />
       <div className="flex-1 p-8 overflow-auto">
         <h1 className="text-3xl font-bold mb-6" style={{ color: '#071D39' }}>Deal Archive</h1>

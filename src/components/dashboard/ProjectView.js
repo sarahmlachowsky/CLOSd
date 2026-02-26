@@ -24,6 +24,7 @@ const ProjectView = ({
   showArchiveModal, onOpenArchiveModal, onArchiveProject, onCloseArchiveModal,
   showDeleteModal, dealToDelete, onDeleteDeal, onConfirmDelete, onCancelDelete,
   showEditProjectModal, onOpenEditProject, onCloseEditProject, onSaveEditProject,
+  isSuperAdmin, onSuperAdmin, onHelpSupport, user, orgId,
 }) => {
   return (
     <div className="flex h-screen bg-gray-50">
@@ -40,6 +41,11 @@ const ProjectView = ({
         currentView={currentView}
         getDealTitle={getDealTitle}
         isAdmin={isAdmin}
+        isSuperAdmin={isSuperAdmin}
+        onSuperAdmin={onSuperAdmin}
+        onHelpSupport={onHelpSupport}
+        user={user}
+        orgId={orgId}
       />
       <div className="flex-1 overflow-hidden flex flex-col">
         <div className="bg-white border-b p-4">

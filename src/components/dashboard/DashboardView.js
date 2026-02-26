@@ -11,7 +11,7 @@ import TaskDetailModal from '../tasks/TaskDetailModal';
 const DashboardView = ({
   user, activeProjects, teamMembers, currentView,
   onSelectProject, onPipeline, onDashboard, onArchive, onNewProject,
-  onTeamSettings, onMyProfile, onSuperAdmin, onLogout, getDealTitle, isAdmin, isSuperAdmin, orgId,
+  onTeamSettings, onMyProfile, onHelpSupport, onSuperAdmin, onLogout, getDealTitle, isAdmin, isSuperAdmin, orgId,
   getTaskColor, isTaskUrgent,
   getMyTasks, getDueSoonTasks, getOverdueTasks,
   getMyTasksGroupedByDeal, getDueSoonTasksGroupedByDeal, getOverdueTasksGroupedByDeal,
@@ -36,6 +36,7 @@ const DashboardView = ({
         onTeamSettings={onTeamSettings}
         onMyProfile={onMyProfile}
         onSuperAdmin={onSuperAdmin}
+        onHelpSupport={onHelpSupport}
         onLogout={onLogout}
         currentView={currentView}
         getDealTitle={getDealTitle}
